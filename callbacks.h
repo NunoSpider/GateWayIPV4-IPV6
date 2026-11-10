@@ -49,6 +49,11 @@ typedef struct Query {
 	char			qname[CNAME_LENGTH+41];	// Query id string
 	uint32_t		seq;		// Sequence number
     char			name[CNAME_LENGTH+1]; 	// Name looked up
+    struct 			in6_addr ipv6;
+    struct			in_addr ipv4;
+    u_short 		port;
+
+
 
     guint 			timer_id; 	// Timer event associated
 
@@ -86,7 +91,7 @@ extern WindowElements *main_window;
 
 // Create a Query descriptor and put it in qlist - add parameters to store the QUERY's IP and port number
 // ** TASK 1.2 **
-Query *new_Query(const char *filename, uint32_t seq, gboolean is_ipv6 /*, ...*/);
+Query *new_Query(const char *filename, uint32_t seq, gboolean is_ipv6, struct in6_addr *ipv6, struct in_addr *ipv4, u_short port);
 // Search for Query descriptor in qlist
 Query *locate_qid_in_Querylist(const char *filename, uint32_t seq);
 Query *locate_qid_in_Querylist_by_IPv(const char *filename, uint32_t seq, gboolean is_ipv6);

@@ -79,12 +79,10 @@ gboolean write_query_message(char *buf, int *len, uint32_t seq, const char* file
 
 	// write the QUERY code to the buffer
 	WRITE_BUF(pt, &cod, sizeof(unsigned char));
-
-	Log("write_query_message not implemented yet\n");
-	// ** TASK 1.1 **: complete the code
-	// ...
-	// *len= ... length of the bytes written to buf ...;
-
+	WRITE_BUF(pt, &seq, sizeof(uint32_t));
+	WRITE_BUF(pt, &fnlen, sizeof(fnlen));
+	WRITE_BUF(pt, filename, fnlen);
+	*len = pt - buf;
 	return TRUE;
 }
 

@@ -53,7 +53,7 @@ gboolean callback_query_timeout(gpointer data);
 \*****************************************/
 
 // Create a Query descriptor and put it in qlist; starts the timer
-Query *new_Query(const char *filename, uint32_t seq, gboolean is_ipv6) {
+Query *new_Query(const char *filename, uint32_t seq, gboolean is_ipv6, struct in6_addr *ipv6, struct in_addr *ipv4, u_short port) {
 	// Add the additional parameters to store the IPv6/IPv4 and port numbers of the
 	// Query sender, to later forward the Hit message to this address.
 	Query *pt;
@@ -70,15 +70,18 @@ Query *new_Query(const char *filename, uint32_t seq, gboolean is_ipv6) {
 	sprintf(pt->qname, "'%s'(%d)%s", filename, seq, is_ipv6 ? "v6" : "v4");
 	// ** TASK 1.2 **
 	// Store the IPv6, IPv4 and port number
-	// ...
+	pt -> port = port;
 	pt->self_ = pt;
+	memcpy( &pt->ipv6, ipv6,sizeof(struct in6_addr));
+	if (!is_ipv6)
+		memcpy (&pt->ipv4,ipv4,sizeof(struct in_addr));
 	pthread_mutex_lock(&mutex4);
 	qlist = g_list_append(qlist, pt);
 	pthread_mutex_unlock(&mutex4);
 	return pt;
 }
 
-// Update Hit information in qlist
+// Update Hit ilogormation in qlist
 void update_HIT_info(Query *q, unsigned long long flen, u_int fhash) {
 	assert(q != NULL);
 	// Update them only if you added these values to the structure
@@ -259,19 +262,21 @@ void handle_Query(char *buf, int buflen, gboolean is_ipv6,
 	Log(tmp_buf);
 
 
-	Log("handle_Query not implemented yet\n");
+
 
 	// ** TASK 1.2 ** - initial partial implementation for QUERY from IPv6
 	// ** TASK 2.2 + 2.4 ** - updated version with timer support
 
 	// Check if it is a new query (equal name+seq+is_ipv6) searching the Query list - ignore the query if it is an old one
-	// ... Use the Querylist
+	if (locate_qid_in_Querylist_by_IPv(fname, seq, is_ipv6) != NULL)
+		return;
 
 	// Check if the query has appeared in the !is_ipv6 domain - if it has, ignore it because someone else send it before.
-	// ... use the Querylist
+	if (locate_qid_in_Querylist_by_IPv(fname, seq, !is_ipv6) != NULL)
+			return;
 
 	// If it is new, create a new Query struct and store it in the Querylist
-	//		Query *pt= new_Query(fname, seq, is_ipv6, ...);
+			Query *pt= new_Query(fname, seq, is_ipv6,  ipv6, ipv4, port);
 	// Add the query to the GUI
 	//
 	// NOTE: If you think that this qlist stuff is just too much for you, you can use the graphical functions in gui.h (but they are less powerful)
@@ -280,7 +285,7 @@ void handle_Query(char *buf, int buflen, gboolean is_ipv6,
 	GUI_add_Query(fname, seq, is_ipv6, strdup(tmp_ip), port);
 
 	// (TASK x) Start by forwarding the Query message to the other domain (i.e. !is_ipv6) using:
-	// ... send_multicast(buf, buflen, !is_ipv6);
+	 send_multicast(buf, buflen, !is_ipv6);
 	//
 	// At TASK x, if you have time, replace with starting a jitter timer, which will send the Query later!
 	//	This helps when there are more than one gateway is connecting two multicast groups!
@@ -316,7 +321,9 @@ void handle_Hit(char *buf, int buflen, struct in6_addr *ip, u_short port,
 			fname, ipstr, sTCP_port, flen, fhash, addr_ipv6(ip), port);
 	Log(tmp_buf);
 
-	Log("handle_Hit not implemented yet\n");
+	Query *q = locate_qid_in_Querylist_by_IPv(fname  ,seq,!is_ipv6  );
+	if (q == NULL)
+		return;
 
 	// ** TASK 1.2 **
 	// Test here if this HIT matches one of the pending Query contents in the list
@@ -327,7 +334,7 @@ void handle_Hit(char *buf, int buflen, struct in6_addr *ip, u_short port,
 	sprintf(tmp_buf, "%s-%hu", addr_ipv6(ip), sTCP_port);
 	GUI_add_hit_to_Query(fname, seq, !is_ipv6, tmp_buf);
 
-	if (TRUE/* HIT comes from IPv4 fileexchange == QUERY came from IPv6 */) {
+	if (!is_ipv6) {
 		/***********************************************/
 		/**** HIT received from an IPv4 fileexchange ***/
 		/***********************************************/
@@ -341,16 +348,20 @@ void handle_Hit(char *buf, int buflen, struct in6_addr *ip, u_short port,
 		//	   str_ip has the IP address and port has the port number of the client.
 
 		// HIT was received from IPv4 - convert the serverIP to the IPV6 dual stack equivalent
-		// ...
+		struct in6_addr srv_ipv6;
+
+		translate_ipv4_to_ipv6(addr_ipv4(&srvIP4), &srv_ipv6);
 
 		// Write the HIT packet contents to a buffer
 		// Use the function write_hit_message(hbuf, &hlen, seq, fname, fhash, flen, sTCP_port, ...) to prepare the Hit message
 		//     in buffer hbuf, where the missing parameter contains the fileexchange's IP addresses is a string with the server's IPv6 address converted from IPv4
-		// ...
+
+		write_hit_message(hbuf, &hlen, seq, fname, flen, fhash, sTCP_port,
+				TRUE, &srv_ipv6, NULL);
 
 
 		// Send the HIT packet to the client fileexchange
-		//    use the function send_M6reply(... , ... , hbuf, hlen) to send the Hit
+		send_M6reply(&q->ipv6, q-> port , hbuf, hlen);
 
 		// In order to avoid not seeing the Query in the graphical table, you must wait for a timeout to clear the GUI entry
 		// Otherwise, you can clear it from the GUI table here using:
